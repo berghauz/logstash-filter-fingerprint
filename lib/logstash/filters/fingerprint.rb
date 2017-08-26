@@ -137,14 +137,14 @@ class LogStash::Filters::Fingerprint < LogStash::Filters::Base
         end
         to_string << "|"
         @logger.debug? && @logger.debug("String built", :to_checksum => to_string)
-        event.set(@target, anonymize(to_string))
+        event.set(@target, anonymize(event, to_string))
       else
         @source.each do |field|
           next unless event.include?(field)
           if event.get(field).is_a?(Array)
-            event.set(@target, event.get(field).collect { |v| anonymize(v) })
+            event.set(@target, event.get(field).collect { |v| anonymize(event, v) })
           else
-            event.set(@target, anonymize(event.get(field)))
+            event.set(@target, anonymize(event, event.get(field)))
           end
         end
       end
@@ -154,22 +154,22 @@ class LogStash::Filters::Fingerprint < LogStash::Filters::Base
 
   private
 
-  def anonymize_ipv4_network(ip_string)
+  def anonymize_ipv4_network(event, ip_string)
     # in JRuby 1.7.11 outputs as US-ASCII
     IPAddr.new(ip_string).mask(@key.to_i).to_s.force_encoding(Encoding::UTF_8)
   end
 
-  def anonymize_openssl(data)
+  def anonymize_openssl(event, data)
     # in JRuby 1.7.11 outputs as ASCII-8BIT
     if @base64encode
-      hash  = OpenSSL::HMAC.digest(@digest, @key, data.to_s)
+      hash  = OpenSSL::HMAC.digest(@digest, event.sprintf(@key), data.to_s)
       Base64.strict_encode64(hash).force_encoding(Encoding::UTF_8)
     else
-      OpenSSL::HMAC.hexdigest(@digest, @key, data.to_s).force_encoding(Encoding::UTF_8)
+      OpenSSL::HMAC.hexdigest(@digest, event.sprintf(@key), data.to_s).force_encoding(Encoding::UTF_8)
     end
   end
 
-  def anonymize_murmur3(value)
+  def anonymize_murmur3(event, value)
     case value
     when Fixnum
       MurmurHash3::V32.int_hash(value)
